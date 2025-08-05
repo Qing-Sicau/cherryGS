@@ -718,8 +718,8 @@ plan(sequential) # Return to sequential processing
 
 # --- Combine results into a final printable summary table ---
 final_summary_printable <- bind_rows(
-  result_A %>% select(-CV_Summary),
-  result_B %>% select(-CV_Summary)
+  result_A %>% dplyr::select(-CV_Summary),
+  result_B %>% dplyr::select(-CV_Summary)
 )
 
 cat("\n\n====================================================================\n")
@@ -736,3 +736,4 @@ print(result_B$CV_Summary[[1]])
 output_filename <- paste0("GS_Cross_Population_Summary_", TRAIT_OF_INTEREST, ".csv")
 write.csv(final_summary_printable, output_filename, row.names = FALSE)
 cat(paste0("\n\n[COMPLETE] Analysis finished. Final summary saved to '", output_filename, "'\n"))
+
