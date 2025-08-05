@@ -17,6 +17,7 @@ required_packages <- c(
 )
 lapply(required_packages, library, character.only = TRUE)
 
+
 # =====================================================================================
 # Part 0.1: Find Python Path Before Parallelization
 # =====================================================================================
@@ -294,12 +295,12 @@ run_one_repetition <- function(rep_id) {
     pred_ridge <- predict(cv_ridge, newx = genotypeTest, s = "lambda.min")[, 1]
     df_ridge <- data.frame(Repetition = rep_id, Fold = i, Model = "Ridge", Cor = cor(pred_ridge, phenotypeTest, use = "complete.obs"), alpha = 0)
     rep_results_list[[length(rep_results_list) + 1]] <- standardize_df(df_ridge)
-    
+
     cv_lasso <- cv.glmnet(genotypeTrain, phenotypeTrain, alpha = 1, family="gaussian")
     pred_lasso <- predict(cv_lasso, newx = genotypeTest, s = "lambda.min")[, 1]
     df_lasso <- data.frame(Repetition = rep_id, Fold = i, Model = "LASSO", Cor = cor(pred_lasso, phenotypeTest, use = "complete.obs"), alpha = 1)
     rep_results_list[[length(rep_results_list) + 1]] <- standardize_df(df_lasso)
-    
+
     best_alpha <- NA; best_lambda <- NA; best_mse <- Inf
     for (a in alpha_grid) {
       cv_fit <- cv.glmnet(genotypeTrain, phenotypeTrain, alpha = a, family="gaussian")
@@ -327,7 +328,9 @@ run_one_repetition <- function(rep_id) {
         verbose = FALSE
       )
       
-      pred_gblup <- fitted(fit_gblup)[test_ids]
+      predictions_table_gblup <- predict(fit_gblup, D = "ID")
+      pred_gblup <- predictions_table_gblup$pvals[test_ids, "predicted.value"]
+      
       df_gblup <- data.frame(Repetition = rep_id, Fold = i, Model = "GBLUP", Cor = cor(pred_gblup, phenotypeTest, use = "complete.obs"))
       rep_results_list[[length(rep_results_list) + 1]] <- standardize_df(df_gblup)
     }, error = function(e) {
@@ -349,7 +352,7 @@ run_one_repetition <- function(rep_id) {
       df_bglr <- data.frame(Repetition = rep_id, Fold = i, Model = m_name, Cor = cor(pred_bglr, phenotypeTest, use = "complete.obs"))
       rep_results_list[[length(rep_results_list) + 1]] <- standardize_df(df_bglr)
     }
-    
+
     # --- 4. Single-Step GBLUP (ssGBLUP using sommer) ---
     tryCatch({
       phenotypeVectorWithFounders <- rep(NA, nrow(pedigreeRelationshipMatrix))
@@ -378,7 +381,9 @@ run_one_repetition <- function(rep_id) {
         henderson = TRUE
       )
       
-      pred_ssgblup <- fitted(fit_ssgblup)[test_ids]
+      predictions_table_ssgblup <- predict(fit_ssgblup, D = "ID")
+      pred_ssgblup <- predictions_table_ssgblup$pvals[test_ids, "predicted.value"]
+      
       df_ssgblup <- data.frame(Repetition = rep_id, Fold = i, Model = "ssGBLUP", Cor = cor(pred_ssgblup, phenotypeTest, use = "complete.obs"))
       rep_results_list[[length(rep_results_list) + 1]] <- standardize_df(df_ssgblup)
     }, error = function(e) {
@@ -406,11 +411,17 @@ run_one_repetition <- function(rep_id) {
         verbose = FALSE
       )
       
-      pred_ad_gblup <- fitted(fit_ad_gblup)[test_ids]
+      predictions_table_ad <- predict(fit_ad_gblup, D = "ID_A") # which factor to predict
+      pred_ad_gblup <- predictions_table_ad$pvals[test_ids, "predicted.value"]
       cor_ad <- cor(pred_ad_gblup, phenotypeTest, use = "complete.obs")
       
-      var_a <- fit_ad_gblup$theta[[1]][1]
-      var_d <- fit_ad_gblup$theta[[2]][1]
+      var_a <- fit_ad_gblup$sigma$`vsm(ism(ID_A), Gu = G)`
+      if (!is.null(fit_ad_gblup$sigma$`vsm(ism(ID_D), Gu = D)`)) {
+        var_d <- fit_ad_gblup$sigma$`vsm(ism(ID_D), Gu = D)`
+      } else {
+        var_d <- 0 
+      }
+      
       if (length(var_a) == 0) var_a <- NA
       if (length(var_d) == 0) var_d <- NA
       
@@ -429,7 +440,7 @@ run_one_repetition <- function(rep_id) {
     train_mean <- colMeans(genotypeTrain); train_sd <- apply(genotypeTrain, 2, sd); train_sd[train_sd == 0] <- 1
     genotypeTrain_scaled <- scale(genotypeTrain, center = train_mean, scale = train_sd)
     genotypeTest_scaled <- scale(genotypeTest, center = train_mean, scale = train_sd)
-    
+
     tryCatch({ # MLP
       mlp_param_grid <- expand.grid(dropout_rate = c(0.3, 0.5), neurons = c(64, 128))
       best_val_loss <- Inf; best_mlp_params <- list(dropout_rate=NA, neurons=NA)
@@ -460,7 +471,7 @@ run_one_repetition <- function(rep_id) {
       df_error <- data.frame(Repetition = rep_id, Fold = i, Model = "MLP", Cor = NA)
       rep_results_list[[length(rep_results_list) + 1]] <- standardize_df(df_error)
     })
-    
+
     tryCatch({ # CNN
       xtrain_cnn <- array(genotypeTrain_scaled, dim = c(nrow(genotypeTrain_scaled), ncol(genotypeTrain_scaled), 1))
       xtest_cnn <- array(genotypeTest_scaled, dim = c(nrow(genotypeTest_scaled), ncol(genotypeTest_scaled), 1))
@@ -515,7 +526,6 @@ cat("\nCross-validation finished!\n")
 # --- IMPORTANT: Stop the parallel cluster ---
 cat("Stopping the parallel cluster...\n")
 parallel::stopCluster(cl)
-
 
 # =====================================================================================
 # Part 3: Result Summarization and Visualization
