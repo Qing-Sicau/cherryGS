@@ -434,33 +434,60 @@ cat("\n[COMPLETE] Full analysis across all SNP densities finished!\n")
 # --- Calculate Summary Statistics ---
 cat("\n[RESULTS] Summarizing and plotting results...\n")
 summary_stats <- results_df %>%
-  filter(!is.na(Cor)) %>%
-  group_by(Model, SNP_Density, Num_SNPs) %>%
-  summarise(
+  dplyr::filter(!is.na(Cor)) %>%
+  dplyr::group_by(Model, SNP_Density, Num_SNPs) %>%
+  dplyr::summarise(
     Mean_Cor = mean(Cor, na.rm=TRUE),
     SD_Cor = sd(Cor, na.rm=TRUE),
     .groups = 'drop'
   ) %>%
-  arrange(desc(SNP_Density), desc(Mean_Cor))
+  dplyr::arrange(desc(SNP_Density), desc(Mean_Cor))
 
 print("Summary of prediction accuracies across different SNP densities:")
 print(as.data.frame(summary_stats))
 
-# --- Plot: Model Performance vs. SNP Density ---
+# --- Plot: Model Performance vs. SNP Density (Corrected Logic) ---
+# Calculate the actual number of markers sampled for each density level from the summary table
+# This ensures the breaks are accurate even if some markers were removed (e.g., non-polymorphic)
+snp_break_points <- summary_stats %>%
+  dplyr::select(SNP_Density, Num_SNPs) %>%
+  dplyr::distinct() %>%
+  dplyr::arrange(Num_SNPs)
+
 plot_density_decay <- ggplot(summary_stats, aes(x = Num_SNPs, y = Mean_Cor, group = Model, color = Model)) +
   geom_line(linewidth = 1.1) +
-  geom_point(size = 2.5) +
-  geom_errorbar(aes(ymin = Mean_Cor - SD_Cor, ymax = Mean_Cor + SD_Cor), width = 0.02 * numMarkers_full, alpha = 0.4) +
-  scale_x_log10(breaks = unique(summary_stats$Num_SNPs), labels = scales::comma) + # Use a log scale for better visualization of low densities
+  geom_point(size = 2.5, alpha = 0.8) +
+  # Corrected geom_errorbar: width is now smaller and absolute, preventing overly large bars on the log scale
+  geom_errorbar(aes(ymin = Mean_Cor - SD_Cor, ymax = Mean_Cor + SD_Cor), width = 0, alpha = 0.6) + # Set width to 0 to make it a vertical line
+  geom_point(size = 2.5, alpha = 0.8) + # Re-plot points to be on top of error bars
+  
+  # Corrected scale_x_log10:
+  # 1. Let ggplot handle the minor breaks automatically for a clean log scale.
+  # 2. Set the major breaks to be exactly at our tested SNP numbers for clarity.
+  # 3. Use the density percentages as labels for better intuition.
+  scale_x_log10(
+    breaks = snp_break_points$Num_SNPs,
+    labels = paste0(snp_break_points$SNP_Density * 100, "%")
+  ) +
+  
+  # Add annotation for number of SNPs below the percentage for full context
+  annotate("text", x = snp_break_points$Num_SNPs, y = min(summary_stats$Mean_Cor - summary_stats$SD_Cor, na.rm = TRUE) * 0.95, 
+           label = paste0("(", scales::comma(snp_break_points$Num_SNPs), ")"), size = 2.8, angle = 45, hjust = 1) +
+  
   labs(
-    title = "Prediction Accuracy vs. SNP Density",
-    subtitle = paste0("Trait: ", TRAIT_OF_INTEREST, " (Avg. of ", NUM_REPEATS, " Repeats of 5-Fold CV)"),
-    x = "Number of SNP Markers Used (Log Scale)",
-    y = "Mean Prediction Accuracy (r)",
+    title = paste("Prediction Accuracy vs. SNP Marker Density for", TRAIT_OF_INTEREST),
+    subtitle = paste0("Average of ", NUM_REPEATS, " Repeats (5-Fold Cross-Validation)"),
+    x = "SNP Density (% of Total Markers)",
+    y = "Mean Prediction Accuracy (Pearson's r)",
     color = "Prediction Model"
   ) +
   theme_publication() +
-  theme(legend.position = "bottom")
+  theme(
+    legend.position = "right",
+    axis.text.x = element_text(angle = 45, hjust = 1) # Rotate labels for better fit
+  ) +
+  coord_cartesian(clip = "off") # Allows annotations outside the main plot area
+
 
 # --- Create output directory and Save Results ---
 if (!dir.exists("./plots")) dir.create("./plots", recursive = TRUE)
