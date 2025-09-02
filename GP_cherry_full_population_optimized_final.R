@@ -381,8 +381,12 @@ for (TRAIT_OF_INTEREST in ALL_TRAITS_IN_FILE) {
         data_sommer$ID_D <- factor(data_sommer$ID, levels = rownames(D))
         
         fit_ad <- mmes(fixed=y~1, random=~vsm(ism(ID_A), Gu=G) + vsm(ism(ID_D), Gu=D), rcov=~units, data=data_sommer, naMethodY="include", verbose=F)
-        pred_table <- predict(fit_ad, D = "ID_A")
-        pred_ad <- pred_table$pvals[test_ids, "predicted.value"]
+        # pred_table <- predict(fit_ad, D = "ID_A")
+        # pred_ad <- pred_table$pvals[test_ids, "predicted.value"]
+        intercept <- fit_ad$b[1, 1]
+        u_A <- fit_ad$uList[[1]][test_ids, , drop=FALSE] 
+        u_D <- fit_ad$uList[[2]][test_ids, , drop=FALSE]
+        pred_ad <- intercept + u_A + u_D
         
         var_a <- fit_ad$sigma[[1]]; if (length(var_a) == 0) var_a <- NA
         var_d <- fit_ad$sigma[[2]]; if (length(var_d) == 0) var_d <- NA
@@ -577,3 +581,4 @@ parallel::stopCluster(cl)
 plan(sequential)
 log_message("[CLEANUP] Parallel cluster stopped.")
 log_message("\n[--- FINISHED ---] Analysis pipeline complete for all traits.")
+
