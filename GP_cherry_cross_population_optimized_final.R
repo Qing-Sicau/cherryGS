@@ -341,8 +341,13 @@ perform_cross_population_prediction <- function(train_ids, pred_ids, train_pop_n
     data_sommer$ID_A <- factor(data_sommer$ID, levels=rownames(G_full))
     data_sommer$ID_D <- factor(data_sommer$ID, levels=rownames(D_full))
     fit_ad <- mmes(fixed=y~1, random=~vsm(ism(ID_A), Gu=G_full) + vsm(ism(ID_D), Gu=D_full), rcov=~units, data=data_sommer, naMethodY="include", verbose=F)
-    pred_table <- predict(fit_ad, D = "ID_A")
-    pred_ad <- pred_table$pvals[pred_ids, "predicted.value"]
+    # pred_table <- predict(fit_ad, D = "ID_A")
+    # pred_ad <- pred_table$pvals[pred_ids, "predicted.value"]
+    intercept <- fit_ad$b[1, 1]
+    u_A <- fit_ad$uList[[1]][test_ids, , drop=FALSE] 
+    u_D <- fit_ad$uList[[2]][test_ids, , drop=FALSE]
+    pred_ad <- intercept + u_A + u_D
+    
     results_list[["AD-GBLUP"]] <- cor(pred_ad, pheno_pred, use="complete.obs")
   })
   
@@ -479,3 +484,4 @@ output_filename <- "results/GS_Cross_Population_Summary_All_Traits_Wide.csv"
 write.csv(final_summary_wide, output_filename, row.names = FALSE)
 log_message(paste0("\n\n[--- FINISHED ---] Analysis complete. Final summary saved to '", output_filename, "'"))
 log_message(paste0("Incremental results for all completed traits are available in '", incremental_results_file, "'"))
+
