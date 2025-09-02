@@ -387,9 +387,10 @@ for (TRAIT_OF_INTEREST in ALL_TRAITS_IN_FILE) {
         u_A <- fit_ad$uList[[1]][test_ids, , drop=FALSE] 
         u_D <- fit_ad$uList[[2]][test_ids, , drop=FALSE]
         pred_ad <- intercept + u_A + u_D
-        
+
         var_a <- fit_ad$sigma[[1]]; if (length(var_a) == 0) var_a <- NA
         var_d <- fit_ad$sigma[[2]]; if (length(var_d) == 0) var_d <- NA
+        
         df_ad <- data.frame(Repetition=rep_id, Fold=i, Model="AD-GBLUP", Cor=cor(pred_ad, phenotypeTest, use="complete.obs"), varA=var_a, varD=var_d)
         rep_results_list[[length(rep_results_list) + 1]] <- df_ad
         cat(paste0("    [CV] Rep ", rep_id, " Fold ", i, ": AD-GBLUP complete.\n"))
@@ -413,34 +414,34 @@ for (TRAIT_OF_INTEREST in ALL_TRAITS_IN_FILE) {
       }, error = function(e){ cat(paste0("  - ERROR in ssGBLUP, Rep ", rep_id, " Fold ", i, ": ", e$message, "\n")) })
 
 
-      # ssGBLUP (Corrected Workflow with simulated incomplete-information scenario)
-      tryCatch({
-        cat(paste0("    [CV] Rep ", rep_id, " Fold ", i, ": Running ssGBLUP (with simulated scenario)...\n"))
+      # # ssGBLUP (Corrected Workflow with simulated incomplete-information scenario)
+      # tryCatch({
+      #   cat(paste0("    [CV] Rep ", rep_id, " Fold ", i, ": Running ssGBLUP (with simulated scenario)...\n"))
 
-        set.seed(123 + i) # set seeds to be able to repeat sampling
-        train_gp_indices <- sample(train_indices, size = floor(0.5 * length(train_indices)))
-        train_gp_ids <- names(phenotypeVector[train_gp_indices])
+      #   set.seed(123 + i) # set seeds to be able to repeat sampling
+      #   train_gp_indices <- sample(train_indices, size = floor(0.5 * length(train_indices)))
+      #   train_gp_ids <- names(phenotypeVector[train_gp_indices])
 
-        G_subset <- G[train_gp_ids, train_gp_ids]
-        hMatrixInverse_fold <- doH_1_inverse(A_full, G_subset)
+      #   G_subset <- G[train_gp_ids, train_gp_ids]
+      #   hMatrixInverse_fold <- doH_1_inverse(A_full, G_subset)
 
-        # new hMatrixInverse_fold to run the model
-        pheno_ssgblup <- rep(NA, nrow(A_full)); names(pheno_ssgblup) <- rownames(A_full)
-        pheno_ssgblup[names(phenotypeWithNAs)] <- phenotypeWithNAs
-        data_sommer <- data.frame(ID = names(pheno_ssgblup), y = pheno_ssgblup)
+      #   # new hMatrixInverse_fold to run the model
+      #   pheno_ssgblup <- rep(NA, nrow(A_full)); names(pheno_ssgblup) <- rownames(A_full)
+      #   pheno_ssgblup[names(phenotypeWithNAs)] <- phenotypeWithNAs
+      #   data_sommer <- data.frame(ID = names(pheno_ssgblup), y = pheno_ssgblup)
         
-        # use the new hMatrixInverse_fold
-        data_sommer$ID <- factor(data_sommer$ID, levels = rownames(hMatrixInverse_fold))
+      #   # use the new hMatrixInverse_fold
+      #   data_sommer$ID <- factor(data_sommer$ID, levels = rownames(hMatrixInverse_fold))
         
-        fit_ss <- mmes(fixed=y~1, random=~vsm(ism(ID), Gu=hMatrixInverse_fold), rcov=~units, data=data_sommer, naMethodY="include", verbose=F, henderson=T)
-        pred_table <- predict(fit_ss, D = "ID")
-        pred_ss <- pred_table$pvals[test_ids, "predicted.value"]
+      #   fit_ss <- mmes(fixed=y~1, random=~vsm(ism(ID), Gu=hMatrixInverse_fold), rcov=~units, data=data_sommer, naMethodY="include", verbose=F, henderson=T)
+      #   pred_table <- predict(fit_ss, D = "ID")
+      #   pred_ss <- pred_table$pvals[test_ids, "predicted.value"]
         
-        df_ss <- data.frame(Repetition=rep_id, Fold=i, Model="ssGBLUP", Cor=cor(pred_ss, phenotypeTest, use="complete.obs"))
-        rep_results_list[[length(rep_results_list) + 1]] <- df_ss
-        cat(paste0("    [CV] Rep ", rep_id, " Fold ", i, ": ssGBLUP (with simulated scenario) complete.\n"))
+      #   df_ss_sampled <- data.frame(Repetition=rep_id, Fold=i, Model="ssGBLUP_50_Sampled", Cor=cor(pred_ss, phenotypeTest, use="complete.obs"))
+      #   rep_results_list[[length(rep_results_list) + 1]] <- df_ss_sampled
+      #   cat(paste0("    [CV] Rep ", rep_id, " Fold ", i, ": ssGBLUP (with simulated scenario) complete.\n"))
         
-      }, error = function(e){ cat(paste0("  - ERROR in ssGBLUP, Rep ", rep_id, " Fold ", i, ": ", e$message, "\n")) })
+      # }, error = function(e){ cat(paste0("  - ERROR in ssGBLUP with simulated scenariao, Rep ", rep_id, " Fold ", i, ": ", e$message, "\n")) })
 
       # --- 4. Deep Learning Models ---
       cat(paste0("    [CV] Rep ", rep_id, " Fold ", i, ": Preparing data for DL models...\n"))
@@ -581,4 +582,3 @@ parallel::stopCluster(cl)
 plan(sequential)
 log_message("[CLEANUP] Parallel cluster stopped.")
 log_message("\n[--- FINISHED ---] Analysis pipeline complete for all traits.")
-
